@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import {PythonShell} from 'python-shell';
 import * as path from 'path';
+import {exec} from 'child_process';
 
 // When extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -28,34 +29,50 @@ export function activate(context: vscode.ExtensionContext) {
 		const pythonPath = PythonShell.getPythonPath();
 		const modifiedPythonPath = "PYTHONPATH=" + rootDirname + ' ' + pythonPath;
 
-		console.log(modifiedPythonPath, "-m", pyScriptPath, coqFilePath, coqFileRootDir);
+		const command = modifiedPythonPath + " -um " + pyScriptPath + ' ' + coqFilePath + ' ' + coqFileRootDir + ' ' + {YOUR_OPENAI_API_KEY};
+		console.log(command);
 
-		PythonShell.run(pyScriptPath, {
-			args: [coqFilePath, coqFileRootDir],
-			pythonOptions: ['-m'],
-			pythonPath: modifiedPythonPath
-		}).then((results) => {
-			console.log("Results obtained: %s", results.toString());
-			
-			let responseResult = results.pop();
-			let changedText = results.join('\n');
-
-			if (responseResult === 'success') {
-				vscode.window.showInformationMessage('Coqpilot found some admitted proofs that it can automatically substitute.');
-				vscode.window.showQuickPick(['Accept', 'Reject']).then((value) => {
-					if (value === 'Accept' && editor) {
-						let lastLineIndex = editor.document.lineCount - 1;
-						let lastLine = editor?.document.lineAt(lastLineIndex);
-						let start = new vscode.Position(0, 0);
-						let end = new vscode.Position(lastLineIndex, lastLine.text.length);
-
-						editor.edit((editBuilder) => {
-							editBuilder.replace(new vscode.Range(start, end), changedText);
-						});
-					}
-				});
+		exec(command, (error, stdout, stderr) => {
+			if (error) {
+			 	console.log(`error: ${error.message}`);
 			} else {
-				vscode.window.showInformationMessage('Coqpilot could not substitute admitted proofs.');
+				if (stderr) {
+					console.log(`stderr:\n ${stderr}`);
+				}
+
+				let results = stdout.split('\n');
+				console.log("Results obtained: %s", stdout);
+				
+				let start = results.indexOf('&start&return&message&');
+				let end = results.indexOf('&end&return&message&');
+
+				if (start === -1 || end === -1) {
+					vscode.window.showInformationMessage('Unexpected behavior occurred. Please report an issue.');
+					return;
+				}
+				let fetchedResult = results.slice(start + 1, end);
+
+				let responseResult = fetchedResult.pop();
+				let changedText = fetchedResult.join('\n');
+				console.log("Changed text: %s", changedText);
+
+				if (responseResult === 'success') {
+					vscode.window.showInformationMessage('Coqpilot found some admitted proofs that it can automatically substitute.');
+					vscode.window.showQuickPick(['Accept', 'Reject']).then((value) => {
+						if (value === 'Accept' && editor) {
+							let lastLineIndex = editor.document.lineCount - 1;
+							let lastLine = editor?.document.lineAt(lastLineIndex);
+							let start = new vscode.Position(0, 0);
+							let end = new vscode.Position(lastLineIndex, lastLine.text.length);
+
+							editor.edit((editBuilder) => {
+								editBuilder.replace(new vscode.Range(start, end), changedText);
+							});
+						}
+					});
+				} else {
+					vscode.window.showInformationMessage('Coqpilot could not substitute admitted proofs.');
+				}
 			}
 		});
 	});
