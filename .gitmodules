@@ -1,0 +1,3 @@
+[submodule "coq_llm_interaction"]
+	path = coq_llm_interaction
+	url = https://github.com/K-dizzled/coq_llm_interaction.git
