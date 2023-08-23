@@ -13,6 +13,15 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage('Please open a Coq file first.');
 			return;
 		} 
+		const openaiApiKey = vscode.workspace.getConfiguration('coqpilot').get('openaiApiKey');
+		if (openaiApiKey === "None") {
+			vscode.window.showInformationMessage('Please set your OpenAI API key in the settings.', 'Open settings').then((value) => {
+				if (value === 'Open settings') {
+					vscode.commands.executeCommand('workbench.action.openSettings', 'coqpilot.openaiApiKey');
+				}
+			});
+			return;
+		}
 
 		vscode.window.showInformationMessage('Coqpilot is now active and will try to substitute admitted proofs.');
 		const coqFilePath = editor.document.uri.path;
@@ -29,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const pythonPath = PythonShell.getPythonPath();
 		const modifiedPythonPath = "PYTHONPATH=" + rootDirname + ' ' + pythonPath;
 
-		const command = modifiedPythonPath + " -um " + pyScriptPath + ' ' + coqFilePath + ' ' + coqFileRootDir + ' ' + {YOUR_OPENAI_API_KEY};
+		const command = modifiedPythonPath + " -um " + pyScriptPath + ' ' + coqFilePath + ' ' + coqFileRootDir + ' ' + openaiApiKey;
 		console.log(command);
 
 		exec(command, (error, stdout, stderr) => {
@@ -57,8 +66,11 @@ export function activate(context: vscode.ExtensionContext) {
 				console.log("Changed text: %s", changedText);
 
 				if (responseResult === 'success') {
-					vscode.window.showInformationMessage('Coqpilot found some admitted proofs that it can automatically substitute.');
-					vscode.window.showQuickPick(['Accept', 'Reject']).then((value) => {
+					vscode.window.showInformationMessage(
+						'Coqpilot found some admitted proofs that it can automatically substitute.',
+						'Accept',
+						'Reject'
+					).then((value) => {
 						if (value === 'Accept' && editor) {
 							let lastLineIndex = editor.document.lineCount - 1;
 							let lastLine = editor?.document.lineAt(lastLineIndex);
