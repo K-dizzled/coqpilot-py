@@ -27,6 +27,11 @@
             "type": "string",
             "default": "None",
             "markdownDescription": "An `open-ai` api key. Is used to communicate with the open-ai api. You can get one [here](https://platform.openai.com/account/api-keys)."
+          },
+          "coqpilot.proofAttemsPerOneTheorem" : {
+            "type": "number",
+            "default": 15,
+            "markdownDescription": "How many proof attempts should be generated for one theorem."
           }
         }
       }

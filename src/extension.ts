@@ -14,6 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		} 
 		const openaiApiKey = vscode.workspace.getConfiguration('coqpilot').get('openaiApiKey');
+		const numberOfShots = vscode.workspace.getConfiguration('coqpilot').get('proofAttemsPerOneTheorem');
 		if (openaiApiKey === "None") {
 			vscode.window.showInformationMessage('Please set your OpenAI API key in the settings.', 'Open settings').then((value) => {
 				if (value === 'Open settings') {
@@ -37,8 +38,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const pythonPath = PythonShell.getPythonPath();
 		const modifiedPythonPath = "PYTHONPATH=" + rootDirname + ' ' + pythonPath;
+		const pythonArgs = [coqFilePath, coqFileRootDir, openaiApiKey, numberOfShots];
 
-		const command = modifiedPythonPath + " -um " + pyScriptPath + ' ' + coqFilePath + ' ' + coqFileRootDir + ' ' + openaiApiKey;
+		const command = modifiedPythonPath + " -um " + pyScriptPath + ' ' + pythonArgs.join(' ');
 		console.log(command);
 
 		exec(command, (error, stdout, stderr) => {
