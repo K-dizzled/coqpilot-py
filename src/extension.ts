@@ -1,7 +1,47 @@
 import * as vscode from 'vscode';
 import {PythonShell} from 'python-shell';
 import * as path from 'path';
-import {exec} from 'child_process';
+import {spawn} from 'child_process';
+
+
+function usePythonOutput(stdout: string, editor: vscode.TextEditor | undefined) {
+	let results = stdout.split('\n');
+	console.log("Results obtained: %s", stdout);
+	
+	let start = results.indexOf('&start&return&message&');
+	let end = results.indexOf('&end&return&message&');
+
+	if (start === -1 || end === -1) {
+		vscode.window.showInformationMessage('Unexpected behavior occurred. Please report an issue.');
+		return;
+	}
+	let fetchedResult = results.slice(start + 1, end);
+
+	let responseResult = fetchedResult.pop();
+	let changedText = fetchedResult.join('\n');
+	console.log("Changed text: %s", changedText);
+
+	if (responseResult === 'success') {
+		vscode.window.showInformationMessage(
+			'Coqpilot found some admitted proofs that it can automatically substitute.',
+			'Accept',
+			'Reject'
+		).then((value) => {
+			if (value === 'Accept' && editor) {
+				let lastLineIndex = editor.document.lineCount - 1;
+				let lastLine = editor?.document.lineAt(lastLineIndex);
+				let start = new vscode.Position(0, 0);
+				let end = new vscode.Position(lastLineIndex, lastLine.text.length);
+
+				editor.edit((editBuilder) => {
+					editBuilder.replace(new vscode.Range(start, end), changedText);
+				});
+			}
+		});
+	} else {
+		vscode.window.showInformationMessage('Coqpilot could not substitute admitted proofs.');
+	}
+}
 
 // When extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -43,50 +83,14 @@ export function activate(context: vscode.ExtensionContext) {
 		const command = modifiedPythonPath + " -um " + pyScriptPath + ' ' + pythonArgs.join(' ');
 		console.log(command);
 
-		exec(command, (error, stdout, stderr) => {
-			if (error) {
-			 	console.log(`error: ${error.message}`);
-			} else {
-				if (stderr) {
-					console.log(`stderr:\n ${stderr}`);
-				}
-
-				let results = stdout.split('\n');
-				console.log("Results obtained: %s", stdout);
-				
-				let start = results.indexOf('&start&return&message&');
-				let end = results.indexOf('&end&return&message&');
-
-				if (start === -1 || end === -1) {
-					vscode.window.showInformationMessage('Unexpected behavior occurred. Please report an issue.');
-					return;
-				}
-				let fetchedResult = results.slice(start + 1, end);
-
-				let responseResult = fetchedResult.pop();
-				let changedText = fetchedResult.join('\n');
-				console.log("Changed text: %s", changedText);
-
-				if (responseResult === 'success') {
-					vscode.window.showInformationMessage(
-						'Coqpilot found some admitted proofs that it can automatically substitute.',
-						'Accept',
-						'Reject'
-					).then((value) => {
-						if (value === 'Accept' && editor) {
-							let lastLineIndex = editor.document.lineCount - 1;
-							let lastLine = editor?.document.lineAt(lastLineIndex);
-							let start = new vscode.Position(0, 0);
-							let end = new vscode.Position(lastLineIndex, lastLine.text.length);
-
-							editor.edit((editBuilder) => {
-								editBuilder.replace(new vscode.Range(start, end), changedText);
-							});
-						}
-					});
-				} else {
-					vscode.window.showInformationMessage('Coqpilot could not substitute admitted proofs.');
-				}
+		let buffer = '';
+		const pythonProcess = spawn(command, {shell: true});
+		
+		pythonProcess.stdout.on('data', (data) => {
+			buffer += data.toString();
+			console.log("--pystdout:", data.toString());
+			if (data.toString().includes('&end&return&message&')) {
+				usePythonOutput(buffer, editor);
 			}
 		});
 	});
