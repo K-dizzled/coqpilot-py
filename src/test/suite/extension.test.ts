@@ -2,6 +2,8 @@ import * as assert from 'assert';
 
 import * as vscode from 'vscode';
 import { CoqEditorUtils, CoqTokens } from '../../coqEditorUtils';
+import { CoqPythonWrapper } from '../../coqPythonWrapper';
+import { ProgressBar } from '../../progressIndicator';
 import * as path from 'path';
 
 suite('CoqTokens Test Suite', () => {
@@ -106,7 +108,6 @@ suite('CoqTokens Test Suite', () => {
 		
 		for (let i = 0; i < theoremNames.length; i++) {
 			let regexp: RegExp = CoqTokens.getTheoremRegexp(theoremNames[i]);
-			console.log(regexp.source);
 			assert.strictEqual(regexp.test(testStrings[i]), expectedResults[i]);
 		}
 	});
@@ -138,17 +139,129 @@ suite('CoqEditorUtils Test Suite', () => {
 		const resFile = path.join(rootDirname, 'src', 'test', 'resources', 'test_coqeditor_utils.v');
 		let uri = vscode.Uri.file(resFile);
 
-		vscode.commands.executeCommand("vscode.open", uri);
+		let editor: vscode.TextEditor | undefined = undefined;
+		vscode.commands.executeCommand("vscode.open", uri).then(() => {
+			editor = vscode.window.visibleTextEditors.find((editor) => {
+				return editor.document.uri.path === uri.path;
+			});
 
-		let editor = vscode.window.visibleTextEditors.find((editor) => {
-			return editor.document.uri.path === uri.path;
+			let coqEditorUtils = new CoqEditorUtils(editor);
+			for (let i = 0; i < theoremNames.length; i++) {
+				let range = coqEditorUtils.getTheoremRange(theoremNames[i]);
+				assert.strictEqual(range?.isEqual(expectedResults[i]), true);
+			}
+		});
+	});
+});
+
+suite('PythonWrapper Test Suite', () => {
+	test('Test getAdmittedTheorems small', async () => {
+		const rootDirname = path.dirname(path.dirname(path.dirname(__dirname)));
+		const coqFile = path.join(rootDirname, 'src', 'test', 'resources', 'test_coqeditor_utils.v');
+		const coqRootDir = path.dirname(coqFile);
+		
+		let ansAdmitted = [
+			"test_incomplete_proof2", "test_incomplete_proof3",
+			"test_incomplete_proof4", "test_incomplete_proof5", 
+			"test_incomplete_proof6"
+		];
+		let ansTraining = ["test_incomplete_proof1", "test_incomplete_proof8"];
+		ansAdmitted.sort(); ansTraining.sort();
+
+		let coqPythonWrapper = new CoqPythonWrapper(coqFile, coqRootDir, rootDirname);
+		await coqPythonWrapper.getAdmittedTheorems().then((result) => {
+			let resAdmitted = result[0];
+			let resTraining = result[1];
+			resAdmitted.sort(); resTraining.sort();
+
+			assert.strictEqual(resAdmitted.length, ansAdmitted.length);
+			assert.strictEqual(resTraining.length, ansTraining.length);
+			for (let i = 0; i < resAdmitted.length; i++) {
+				assert.strictEqual(resAdmitted[i], ansAdmitted[i]);
+			}
+			for (let i = 0; i < resTraining.length; i++) {
+				assert.strictEqual(resTraining[i], ansTraining[i]);
+			}
+		}).catch((err) => {
+			console.log(err);
+		});
+	}).timeout(10000);
+
+	test('Test getAdmittedTheorems big', async () => {
+		const rootDirname = path.dirname(path.dirname(path.dirname(__dirname)));
+		const coqFile = path.join(rootDirname, 'src', 'test', 'resources', 'test_basics_and_induction_sf.v');
+		const coqRootDir = path.dirname(coqFile);
+
+		const ansAdmitted = [
+			"plus_1_neq_0_firsttry", "add_0_r_firsttry", "add_0_r_secondtry",
+			"minus_n_n", "add_assoc", "mult_0_plus'", "plus_rearrange_firsttry",
+			"add_assoc''", "plus_leb_compat_l", "mult_plus_distr_r", "bin_nat_bin_fails",
+			"double_incr", "double_incr_bin", "bin_nat_bin_fails", "nat_to_bin_of_sum",
+			"bin_nat_bin"
+		];
+		const ansTrainingLen = 43; 
+		ansAdmitted.sort();
+
+		let coqPythonWrapper = new CoqPythonWrapper(coqFile, coqRootDir, rootDirname);
+		await coqPythonWrapper.getAdmittedTheorems().then((result) => {
+			let resAdmitted = result[0];
+			let resTraining = result[1];
+			resAdmitted.sort(); resTraining.sort();
+
+			assert.strictEqual(resAdmitted.length, ansAdmitted.length);
+			assert.strictEqual(resTraining.length, ansTrainingLen);
+			for (let i = 0; i < resAdmitted.length; i++) {
+				assert.strictEqual(resAdmitted[i], ansAdmitted[i]);
+			}
+		}).catch((err) => {
+			console.log(err);
 		});
 
-		console.log(editor?.document.getText());
-		let coqEditorUtils = new CoqEditorUtils(editor);
-		for (let i = 0; i < theoremNames.length; i++) {
-			let range = coqEditorUtils.getTheoremRange(theoremNames[i]);
-			assert.strictEqual(range?.isEqual(expectedResults[i]), true);
-		}
-	});
+	}).timeout(100000);
+
+	const partialApplyTwoArg = (fn: (arg0: string[], arg1: number) => void, arg0: string[]) => {
+		return (arg1: number) => {
+			fn(arg0, arg1);
+		};
+	};
+	const partialApply = (fn: (arg0: string[]) => void, arg0: string[]) => {
+		return () => {
+			fn(arg0);
+		};
+	};
+
+	test('Test getAdmittedTheorems progress logger small', async () => {
+		const rootDirname = path.dirname(path.dirname(path.dirname(__dirname)));
+		const coqFile = path.join(rootDirname, 'src', 'test', 'resources', 'test_coqeditor_utils.v');
+		const coqRootDir = path.dirname(coqFile);
+		
+		let coqPythonWrapper = new CoqPythonWrapper(coqFile, coqRootDir, rootDirname);
+		let logBuffer: string[] = [];
+		let correctLogBuffer = [
+			'init 44', 'new 44', 'end', 'init 48', 'new 5', 
+			'new 10', 'new 15', 'new 20', 'new 25', 'new 30', 
+			'new 35', 'new 40', 'new 45', 'end'
+		];
+
+		let progressBar = new ProgressBar(
+			partialApplyTwoArg((logBuffer: string[], count: number) => {
+				logBuffer.push("new " + count);
+			}, logBuffer),
+			partialApplyTwoArg((logBuffer: string[], count: number) => {
+				logBuffer.push("init " + count);
+			}, logBuffer),
+			partialApply((logBuffer: string[]) => {
+				logBuffer.push("end");
+			}, logBuffer)
+		);
+
+		await coqPythonWrapper.getAdmittedTheorems(40000, 10, progressBar).then((_) => {
+			assert.strictEqual(logBuffer.length, correctLogBuffer.length);
+			for (let i = 0; i < logBuffer.length; i++) {
+				assert.strictEqual(logBuffer[i], correctLogBuffer[i]);
+			}
+		}).catch((err) => {
+			console.log(err);
+		});
+	}).timeout(10000);
 });
