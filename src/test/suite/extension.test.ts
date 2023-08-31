@@ -155,6 +155,29 @@ suite('CoqEditorUtils Test Suite', () => {
 });
 
 suite('PythonWrapper Test Suite', () => {
+	test('Test tryProveTheorem small', async () => {
+		const openaiApiKey: string = vscode.workspace.getConfiguration('coqpilot').get('openaiApiKey') ?? "None";
+		const rootDirname = path.dirname(path.dirname(path.dirname(__dirname)));
+		const coqFile = path.join(rootDirname, 'src', 'test', 'resources', 'test_coqeditor_utils.v');
+		const coqRootDir = path.dirname(coqFile);
+		
+		let theoremToProve = "test_incomplete_proof2";
+		let training = ["test_incomplete_proof1", "test_incomplete_proof8"];
+
+		let coqPythonWrapper = new CoqPythonWrapper(coqFile, coqRootDir, rootDirname);
+		await coqPythonWrapper.tryProveTheorem(openaiApiKey, "15", theoremToProve, training).then((result) => {
+			console.log(result);
+			if (result) {
+				assert.strictEqual(result.trim().endsWith("Qed."), true);
+			} else {
+				// Test failed, theorem was not proved
+				assert.strictEqual(true, false);
+			}
+		}).catch((err) => {
+			console.log(err);
+		});
+	}).timeout(50000);
+
 	test('Test getAdmittedTheorems small', async () => {
 		const rootDirname = path.dirname(path.dirname(path.dirname(__dirname)));
 		const coqFile = path.join(rootDirname, 'src', 'test', 'resources', 'test_coqeditor_utils.v');
