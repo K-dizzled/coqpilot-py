@@ -10,7 +10,13 @@ export function activate(context: vscode.ExtensionContext) {
 		windowManager.startProofSearch();
 	});
 
+	let disposableParticulaTheorem = vscode.commands.registerCommand('coqpilot.solve_by_selection', () => {
+		let windowManager = new VsCodeWindowManager();
+		windowManager.solveBySelection();
+	});
+
 	context.subscriptions.push(disposable);
+	context.subscriptions.push(disposableParticulaTheorem);
 }
 
 // This method is called when your extension is deactivated

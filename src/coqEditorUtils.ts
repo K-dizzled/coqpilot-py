@@ -19,9 +19,14 @@ export namespace CoqTokens {
 
     const thmTokenRegexp = "(?:" + Object.values(ThmToken).join("|") + ")";
     const proofEndTokenRegexp = "(?:" + Object.values(ProofEndToken).join("|") + ")";
+    const theoremRegexp = new RegExp(`${thmTokenRegexp} [\\s\\S]*?${proofEndTokenRegexp}`, 'gm');
 
     export function getTheoremRegexp(theoremName: string): RegExp {
         return new RegExp(`${thmTokenRegexp} ${theoremName} [\\s\\S]*?${proofEndTokenRegexp}`, 'gm');
+    }
+
+    export function getTheoremRegexpNoName(): RegExp {
+        return theoremRegexp;
     }
 }
 
@@ -58,5 +63,30 @@ export class CoqEditorUtils {
         this.editor.edit((editBuilder) => {
             editBuilder.replace(range, text);
         });
+    }
+
+    getRangeOfSelection(): vscode.Range | undefined {
+        let selection = this.editor.selection;
+        if (selection.isEmpty) {
+            return undefined;
+        }
+        return new vscode.Range(selection.start, selection.end);
+    }
+
+    findTheoremInSelection(): string | undefined {
+        let range = this.getRangeOfSelection();
+        if (range === undefined) {
+            return undefined;
+        }
+        let text = this.editor.document.getText(range);
+
+        const re = CoqTokens.getTheoremRegexpNoName();
+        let theoremName = text.match(re);
+        if (theoremName === null) {
+            console.log("Theorem name not found");
+            return undefined;
+        }
+        
+        return theoremName[0].split(' ')[1];
     }
 }

@@ -16,6 +16,10 @@
       {
         "command": "coqpilot.start",
         "title": "CoqPilot: Start analysing coq files"
+      },
+      {
+        "command": "coqpilot.solve_by_selection",
+        "title": "CoqPilot: Try to solve theorem currently selected"
       }
     ],
     "configuration": [
