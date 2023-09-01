@@ -151,10 +151,14 @@ export class CoqPythonWrapper {
          */
         return new Promise((resolve, reject) => {
             const pyScriptPath = 'coq_llm_interaction.src.run_coqpilot';
+            let joinedTrainTheorems = trainTheorems.join(',');
+            if (trainTheorems.length === 0) {
+                joinedTrainTheorems = 'EMPTY';
+            }
             let pythonArgs: string[] = [
                 this.coqFilePath, this.coqFileRootDir, 
                 openaiApiKey, numberOfShots.toString(), theoremName, 
-                trainTheorems.join(','),
+                joinedTrainTheorems,
                 CoqPythonWrapper.progressIndicatorMsgStart, 
                 CoqPythonWrapper.progressIndicatorMsgEnd,
                 CoqPythonWrapper.progressUpdateMsg, loggingPercent.toString(), 
